@@ -48,14 +48,19 @@ void Run()
 ```
 ## 回调函数
 这是最重要的部分，回调于GUI中属于重要的一环\
-所以Otter使用了结构化回调类型，使其编写的简洁和便携大幅度增加\
+所以Otter使用了结构化回调类型，使其编写的简洁和便携大幅度增加
 
 ```cpp
 绘制回调
+
  void RB(std::function<void()> callback)
+
 用于GUI的屏幕绘制使用方法为
+
 OtterWindow::OtterWin window;
+
 ***省略创建过程
+
 调用回调 vwindow.RB([&](){
   //使用你的绘制函数
 });
