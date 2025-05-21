@@ -23,8 +23,8 @@ ______________
 4. ---于C/C++->命令输入"/utf-8" 实现UTF兼容
 5. ---导入框架文件,将对应的 **.h**头文件放入对应的文件夹项目，**.cpp同理**
 6. ---**注意:**于项目->管理NuGet程序包->搜寻并安装:
-		1. Microsoft.Web.WebView2
-		2. Microsoft.Windows.ImplementationLibrary
+		1. Microsoft.Web.WebView2\
+		2. Microsoft.Windows.ImplementationLibrary\
 		3. WebView2.Runtime.X64
 三个包于支持Web控件渲染
 
