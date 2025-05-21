@@ -121,7 +121,7 @@ Win.RB([&](){
 调用方法
 
 ```cpp
-Win.OnKeyDown('w',[&](){
+Win.OnKeyDown('w',[&](){ //注意对应映射表是大小字符
 	/*
 		当按下w时进行对应的逻辑回调
 		注意:w与W等价，不区分大小写
@@ -154,7 +154,7 @@ Win.OnKeyDown('w',[&](){
 bool类型，判断按键长按到特定ms时间\
 调用方法
 ```cpp
-	Win.IsKeyLongPress('w',500);
+	Win.IsKeyLongPress('W',500); //注意对应映射表是大小字符
 	/*如果长按w>=500s将会返回true值*/
 ```
 <br></br>
