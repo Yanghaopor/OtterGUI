@@ -493,158 +493,182 @@ bool类型，判断按键长按到特定ms时间\
  
  <br></br>
  ---
- # ---------------------------OtterTCP.h详解-----------------------------
- **TCP为基础的网络协议，为此此头现支持TCP/HTTP传输协议实现前后的实时控制**\
- 一个基于 **Windows Sockets** 的 TCP 端口监控和通信类，支持 HTTP 请求处理和消息记录功能。
+## 3.5更新:网络协议更新
 
-类定义
-class PortMonitor
-公共类型
-回调函数类型
+# OtterTCP 开发文档
+
+## 1. 概述
+
+OtterTCP 是一个基于 Windows 平台的 TCP 通信库，提供了端口监控、消息收发、连接管理等功能。它封装了 Winsock API，简化了 TCP 网络编程的复杂性，并提供了线程安全的接口。
+
+## 2. 主要功能
+
+- TCP 服务器功能：监听指定端口，接受客户端连接
+- 消息记录：记录所有收发消息，支持查询历史记录
+- 连接管理：管理活跃连接，支持主动关闭连接
+- 文件传输：支持文件传输功能（通过 OtterLamae 命名空间）
+- HTTP 请求处理：支持简单的 HTTP GET 请求处理
+
+## 3. 核心类说明
+
+### 3.1 PortMonitor 类
+
+#### 3.1.1 公共接口
+
+**构造函数与析构函数**
 ```cpp
-using MessageHandler = std::function<void(const std::string&)>;
-using ParamHandler = std::function<std::string(const std::string&)>;
+PortMonitor();  // 初始化 Winsock
+~PortMonitor(); // 清理资源
 ```
-消息记录结构体
+
+**端口监控**
+```cpp
+bool startMonitoring(int port); // 开始监听指定端口
+void stopMonitoring();          // 停止监听
+```
+
+**消息发送**
+```cpp
+static bool sendMessage(const std::string& ip, int port, const std::string& message, 
+                      int timeoutMs = 3000, std::vector<std::string>* RectMessg = nullptr);
+bool sendToConnection(SOCKET targetSocket, const std::string& message);
+```
+
+**连接管理**
+```cpp
+std::vector<SOCKET> getActiveConnections() const;
+void closeConnection(SOCKET socket);
+```
+
+**消息记录**
+```cpp
+void clearMessageHistory();
+std::vector<MessageRecord> getMessageHistory() const;
+std::vector<MessageRecord> getConnectionMessages(SOCKET socket) const;
+```
+
+**参数处理器**
+```cpp
+void setParamHandler(const std::string& paramName, ParamHandler handler);
+```
+
+#### 3.1.2 数据结构
+
+**消息记录结构**
 ```cpp
 struct MessageRecord {
-    std::string content;                     // 消息内容
-    bool isOutgoing;                         // 是否为发送的消息
+    std::string content;       // 消息内容
+    bool isOutgoing;           // 是否为发送的消息
+    SOCKET socket;             // 关联的套接字
     std::chrono::system_clock::time_point timestamp; // 时间戳
 };
 ```
-### 构造函数与析构函数
-#### 构造函数
-```cpp
-PortMonitor()
-```
--初始化 Winsock 库\
----抛出异常: 如果 WSAStartup 失败
 
-#### 析构函数
+**连接信息结构**
 ```cpp
-~PortMonitor()
+struct ConnectionInfo {
+    SOCKET socket;              // 套接字
+    sockaddr_in address;        // 客户端地址
+    std::thread thread;         // 处理线程
+    bool active;                // 是否活跃
+};
 ```
--停止监控\
----清理 Winsock 资源
 
-### 公共方法
-#### 监控控制
-startMonitoring
+### 3.2 OtterLamae 命名空间
+
+**数据转换**
 ```cpp
-bool startMonitoring(int port)
+std::pair<std::string, double> extractValuePair(const std::string& input);
+std::string unsignedCharToString(const unsigned char* data, size_t length);
+std::vector<unsigned char> stringToUnsignedChar(const std::string& str);
 ```
--开始监控指定端口\
---参数 port: 要监控的端口号\
----返回: 成功返回true，失败返回false
 
-stopMonitoring
+**文件传输**
 ```cpp
-void stopMonitoring()
+std::vector<unsigned char> InitSenndFile(const std::string& filePath = nullptr);
+void ParseReceivedFile(const std::vector<unsigned char>& data);
 ```
--停止端口监控
 
-#### 消息发送
-sendMessage
-```cpp
-static bool sendMessage(const std::string& ip, int port, const std::string& message)
-```
--静态方法，向指定IP和端口发送消息\
---参数 ip: 目标IP地址\
----参数 port: 目标端口\
-----参数 message: 要发送的消息内容\
------返回: 成功返回true，失败返回false
+## 4. 使用示例
 
-#### 参数处理
-setParamHandler
-```cpp
-void setParamHandler(const std::string& paramName, ParamHandler handler)
-```
--设置动态参数处理器\
---参数 paramName: 参数名称\
----参数 handler: 处理函数
+### 4.1 基本使用
 
-#### 消息历史记录
-getMessageHistory
 ```cpp
-std::vector<MessageRecord> getMessageHistory() const
-```
--获取所有消息记录\
---返回: 消息记录向量
-
-getLastReceivedMessage
-```cpp
-std::string getLastReceivedMessage() const
-```
--获取最近接收的消息\
---返回: 消息内容字符串
-
-getLastSentMessage
-```cpp
-std::string getLastSentMessage() const
-```
--获取最近发送的消息\
---返回: 消息内容字符串
-
-clearMessageHistory
-```cpp
-void clearMessageHistory()
-```
--清空消息历史记录
-
-### OtterLamae 命名空间
-extractValuePair
-```cpp
-std::pair<std::string, double> extractValuePair(const std::string& input)
-```
--从输入字符串中提取标识符和数值对\
---参数 input: 输入字符串(格式: "identifier value")\
----返回: 包含标识符和数值的pair\
-----抛出异常: 如果输入格式无效\
-
-### 使用示例
-```cpp
-// 创建监控器
+// 创建实例
 PortMonitor monitor;
 
+// 开始监听端口
+if (!monitor.startMonitoring(8080)) {
+    std::cerr << "启动监听失败" << std::endl;
+    return -1;
+}
+
 // 设置参数处理器
-monitor.setParamHandler("temp", [](const std::string& value) {
-    return "Temperature: " + value + "°C";
+monitor.setParamHandler("test", [](const std::string& value) {
+    return "处理后的值: " + value;
 });
 
-// 开始监控8080端口
-if (monitor.startMonitoring(8080)) {
-    std::cout << "Monitoring started on port 8080" << std::endl;
-}
-
 // 发送消息
-if (PortMonitor::sendMessage("127.0.0.1", 8080, "GET /?temp=25 HTTP/1.1")) {
-    std::cout << "Message sent" << std::endl;
-}
+std::vector<std::string> responses;
+PortMonitor::sendMessage("127.0.0.1", 8080, "测试消息", 3000, &responses);
 
-// 获取消息历史
-auto history = monitor.getMessageHistory();
-for (const auto& record : history) {
-    std::cout << (record.isOutgoing ? "Sent: " : "Received: ") 
-              << record.content << std::endl;
-}
+// 获取活跃连接
+auto activeConns = monitor.getActiveConnections();
 
-// OtterLamae 使用示例
-try {
-    auto result = OtterLamae::extractValuePair("A 12");
-    std::cout << "Identifier: " << result.first << ", Value: " << result.second << std::endl;
-} catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
+// 停止监听
+monitor.stopMonitoring();
+```
+
+### 4.2 文件传输
+
+```cpp
+// 发送文件
+auto fileData = OtterLamae::InitSenndFile("example.txt");
+std::string fileStr(reinterpret_cast<char*>(fileData.data()), fileData.size());
+PortMonitor::sendMessage("127.0.0.1", 8080, fileStr);
+
+// 接收文件
+auto messages = monitor.getMessageHistory();
+for (const auto& msg : messages) {
+    if (!msg.isOutgoing) {
+        std::vector<unsigned char> data(msg.content.begin(), msg.content.end());
+        OtterLamae::ParseReceivedFile(data);
+    }
 }
 ```
-### 注意事项
-使用前需要确保 Winsock 已正确初始化
 
-消息历史记录默认限制为1000条，超过会自动删除最旧的记录
+## 5. 实现细节
 
-HTTP 处理目前仅支持 GET 请求
+### 5.1 线程模型
 
-线程安全通过互斥锁保证
+- **监控线程**：`monitorThreadFunc` 负责接受新连接
+- **连接线程**：每个连接有一个独立的 `connectionThreadFunc` 线程处理通信
+- **锁机制**：使用三个互斥锁保护不同资源
+  - `m_connectionsMutex`：保护连接列表
+  - `m_historyMutex`：保护消息历史
+  - `m_handlersMutex`：保护参数处理器
+
+### 5.2 连接管理
+
+- 最大连接数限制为 1000
+- 3分钟无活动自动断开连接
+- 提供主动关闭连接接口
+
+### 5.3 消息处理
+
+- 记录所有收发消息
+- 消息历史限制为 900 条（先进先出）
+- 支持按连接查询消息
+
+## 6. 注意事项
+
+1. **线程安全**：大多数公共接口是线程安全的，但应注意不要在回调函数中调用可能导致死锁的方法
+2. **资源清理**：确保在程序退出前调用 `stopMonitoring()`
+3. **性能考虑**：
+   - 消息历史记录会影响性能，生产环境应考虑关闭或优化
+   - 1GB 的接收缓冲区可能过大，应根据实际情况调整
+4. **异常处理**：网络操作可能失败，应适当处理异常
+
 
 使用单例模式实现静态方法访问实例成员
 
