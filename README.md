@@ -46,7 +46,7 @@ ______________
 	#include "Otter.h"
 	
 	int main(){
-		OtterWindow::OtterWin Win;
+		OtterWindow::OtterWin Win(nullptr);
 		Win.SetLayeredMode(false); //必须false，现在分层有问题
 		Win.CreateWindowNew(L"CMCK", 0, L"Otter", 200, 400, 900, 700, NULL, NULL, NULL);
 		Win.ShowWindowR();
@@ -64,7 +64,7 @@ ______________
 
 ## 代码Otter.h->OtterWin类详解
 **Otter.h**类的应用与详解
-1. OtterWindow::OtterWin窗口创建与管理类
+1. OtterWindow::OtterWin窗口创建与管理类(可以绑定其它窗口)
 	- 窗口创建函数->**CreateWindowNew**
 		- **功能**：创建窗口并初始化基础属性
 		- **参数列表**: 窗口类名,窗口样式(默认0),窗口标题,X,Y,W,H,父句柄,菜单句柄,数据包
@@ -72,7 +72,7 @@ ______________
 **CreateWindowNew的调用方法**
 
 ```cpp
-OtterWindow::OtterWin Win; //创建Otter窗口类
+OtterWindow::OtterWin Win(nullptr); //创建Otter窗口类 
 Win.CreateWindowNew(L"CMCK", 0, L"Otter", 200, 400, 900, 700, NULL, NULL, NULL); //填入参数构造窗口
 ```
 <br></br>
@@ -491,186 +491,336 @@ bool类型，判断按键长按到特定ms时间\
  
 12. **void Render(OtterIMG::OtterImageRenderer& imageRenderer)** 渲染兼容
  - 参数 imageRenderer: 图像渲染器引用
+
+13. **wstring ConvertRelativePathToAbsolute(const wstring& relativePath);** 相对路径转换全路径
  
  <br></br>
  ---
-## 3.5更新:网络协议更新
+## 3.7更新:网络协议更新
 
-# OtterTCP 开发文档
+# PortMonitor TCP 通信库文档
 
-## 1. 概述
+## 目录
+1. [概述](#概述)
+2. [基础原理](#基础原理)
+3. [搭建服务器](#搭建服务器)
+4. [搭建客户端](#搭建客户端)
+5. [API 详解](#api-详解)
+6. [示例代码](#示例代码)
+7. [高级功能](#高级功能)
+8. [注意事项](#注意事项)
 
-OtterTCP 是一个基于 Windows 平台的 TCP 通信库，提供了端口监控、消息收发、连接管理等功能。它封装了 Winsock API，简化了 TCP 网络编程的复杂性，并提供了线程安全的接口。
+## 概述 <a name="概述"></a>
+PortMonitor 是一个基于 Winsock 的 C++ TCP 通信库，提供端口监控、消息处理、连接管理等功能。它封装了 TCP 通信的底层细节，使开发者能快速构建 TCP 服务器和客户端应用。
 
-## 2. 主要功能
+主要特性：
+- 多线程处理 TCP 连接
+- 消息历史记录与检索
+- 动态参数处理器
+- 文件传输支持
+- 单例模式管理
+- HTTP 请求处理能力
 
-- TCP 服务器功能：监听指定端口，接受客户端连接
-- 消息记录：记录所有收发消息，支持查询历史记录
-- 连接管理：管理活跃连接，支持主动关闭连接
-- 文件传输：支持文件传输功能（通过 OtterLamae 命名空间）
-- HTTP 请求处理：支持简单的 HTTP GET 请求处理
+## 基础原理 <a name="基础原理"></a>
+PortMonitor 采用经典的 TCP 服务器架构：
 
-## 3. 核心类说明
+1. **监听线程**：
+   - 在指定端口监听连接请求
+   - 使用 `accept()` 接受新连接
+   - 为每个连接创建独立线程
 
-### 3.1 PortMonitor 类
+2. **连接线程**：
+   - 处理特定连接的 I/O 操作
+   - 接收数据并调用消息处理器
+   - 发送响应数据
+   - 管理连接生命周期（超时关闭）
 
-#### 3.1.1 公共接口
+3. **消息处理**：
+   - 所有消息被记录到历史中
+   - 支持自定义消息处理器
+   - 支持参数处理器处理 HTTP 查询
 
-**构造函数与析构函数**
+4. **资源管理**：
+   - 使用互斥锁保护共享资源
+   - 连接超时自动关闭（默认3分钟）
+   - 消息历史限制（最新200条）
+
+## 搭建服务器 <a name="搭建服务器"></a>
+
+### 基本步骤
+1. 获取 PortMonitor 实例
+2. 设置消息处理器（可选）
+3. 设置参数处理器（可选）
+4. 启动监听端口
+5. 运行主循环
+
+### 示例代码
 ```cpp
-PortMonitor();  // 初始化 Winsock
-~PortMonitor(); // 清理资源
-```
+#include "otterTCP.h"
+#include <iostream>
 
-**端口监控**
-```cpp
-bool startMonitoring(int port); // 开始监听指定端口
-void stopMonitoring();          // 停止监听
-```
-
-**消息发送**
-```cpp
-static bool sendMessage(const std::string& ip, int port, const std::string& message, 
-                      int timeoutMs = 3000, std::vector<std::string>* RectMessg = nullptr);
-bool sendToConnection(SOCKET targetSocket, const std::string& message);
-```
-
-**连接管理**
-```cpp
-std::vector<SOCKET> getActiveConnections() const;
-void closeConnection(SOCKET socket);
-```
-
-**消息记录**
-```cpp
-void clearMessageHistory();
-std::vector<MessageRecord> getMessageHistory() const;
-std::vector<MessageRecord> getConnectionMessages(SOCKET socket) const;
-```
-
-**参数处理器**
-```cpp
-void setParamHandler(const std::string& paramName, ParamHandler handler);
-```
-
-#### 3.1.2 数据结构
-
-**消息记录结构**
-```cpp
-struct MessageRecord {
-    std::string content;       // 消息内容
-    bool isOutgoing;           // 是否为发送的消息
-    SOCKET socket;             // 关联的套接字
-    std::chrono::system_clock::time_point timestamp; // 时间戳
-};
-```
-
-**连接信息结构**
-```cpp
-struct ConnectionInfo {
-    SOCKET socket;              // 套接字
-    sockaddr_in address;        // 客户端地址
-    std::thread thread;         // 处理线程
-    bool active;                // 是否活跃
-};
-```
-
-### 3.2 OtterLamae 命名空间
-
-**数据转换**
-```cpp
-std::pair<std::string, double> extractValuePair(const std::string& input);
-std::string unsignedCharToString(const unsigned char* data, size_t length);
-std::vector<unsigned char> stringToUnsignedChar(const std::string& str);
-```
-
-**文件传输**
-```cpp
-std::vector<unsigned char> InitSenndFile(const std::string& filePath = nullptr);
-void ParseReceivedFile(const std::vector<unsigned char>& data);
-```
-
-## 4. 使用示例
-
-### 4.1 基本使用
-
-```cpp
-// 创建实例
-PortMonitor monitor;
-
-// 开始监听端口
-if (!monitor.startMonitoring(8080)) {
-    std::cerr << "启动监听失败" << std::endl;
-    return -1;
+int main() {
+    // 获取单例实例
+    PortMonitor& monitor = PortMonitor::getInstance();
+    
+    // 设置消息处理器
+    monitor.setMessageHandler([](const std::string& msg) {
+        std::cout << "收到消息: " << msg << std::endl;
+        return "已处理: " + msg;
+    });
+    
+    // 设置参数处理器
+    monitor.setParamHandler("time", [](const std::string&) {
+        auto now = std::chrono::system_clock::now();
+        auto now_c = std::chrono::system_clock::to_time_t(now);
+        return std::ctime(&now_c);
+    });
+    
+    // 启动服务器监听8080端口
+    if (monitor.startMonitoring(8080)) {
+        std::cout << "服务器已启动，监听端口 8080" << std::endl;
+        std::cout << "按回车键停止服务器..." << std::endl;
+        std::cin.get();
+        monitor.stopMonitoring();
+    } else {
+        std::cerr << "服务器启动失败" << std::endl;
+    }
+    
+    return 0;
 }
+```
 
-// 设置参数处理器
-monitor.setParamHandler("test", [](const std::string& value) {
-    return "处理后的值: " + value;
+### 关键配置
+- **端口选择**：使用 1024-65535 之间的端口
+- **消息处理器**：处理所有原始 TCP 消息
+- **参数处理器**：处理特定 HTTP GET 参数
+- **连接限制**：默认最多1000个并发连接
+
+## 搭建客户端 <a name="搭建客户端"></a>
+
+### 基本方法
+使用 `PortMonitor::sendMessage()` 静态方法发送消息并接收响应
+
+### 示例代码
+```cpp
+#include "otterTCP.h"
+#include <iostream>
+
+int main() {
+    std::vector<std::string> responses;
+    
+    // 发送消息到服务器
+    bool success = PortMonitor::sendMessage(
+        "127.0.0.1",  // 服务器IP
+        8080,         // 服务器端口
+        "Hello Server!", // 消息内容
+        3000,         // 超时时间(毫秒)
+        &responses    // 接收响应容器
+    );
+    
+    if (success) {
+        std::cout << "消息发送成功！收到 " 
+                  << responses.size() << " 条响应:" << std::endl;
+        for (const auto& res : responses) {
+            std::cout << "> " << res << std::endl;
+        }
+    } else {
+        std::cerr << "消息发送失败" << std::endl;
+    }
+    
+    return 0;
+}
+```
+
+### 其他客户端选项
+1. **HTTP 客户端**：
+   ```
+   http://localhost:8080?time
+   ```
+   
+2. **网络工具**：
+   - Telnet
+   - Netcat
+   - Postman
+
+## API 详解 <a name="api-详解"></a>
+
+### 核心方法
+| 方法 | 描述 |
+|------|------|
+| `startMonitoring(int port)` | 启动端口监听 |
+| `stopMonitoring()` | 停止监听并关闭所有连接 |
+| `sendMessage(...)` | 发送消息到指定服务器 |
+| `setMessageHandler(handler)` | 设置全局消息处理器 |
+| `setParamHandler(name, handler)` | 设置参数处理器 |
+| `getActiveConnections()` | 获取所有活跃连接 |
+| `closeConnection(SOCKET)` | 关闭指定连接 |
+| `getMessageHistory()` | 获取所有消息历史 |
+
+### 数据结构
+**ConnectionInfo**:
+- `socket`: 连接套接字
+- `address`: 客户端地址
+- `active`: 连接是否活跃
+- `thread`: 处理线程
+
+**MessageRecord**:
+- `content`: 消息内容
+- `isOutgoing`: 是否为发送消息
+- `socket`: 关联套接字
+- `timestamp`: 时间戳
+
+### OtterLamae 命名空间
+| 函数 | 描述 |
+|------|------|
+| `extractValuePair()` | 提取键值对 (A 12) |
+| `unsignedCharToString()` | UCHAR 转 string |
+| `stringToUnsignedChar()` | string 转 UCHAR |
+| `InitSenndFile()` | 准备文件发送数据 |
+| `ParseReceivedFile()` | 解析接收的文件 |
+| `OpenWeb()` | 打开网页应用 |
+
+## 示例代码 <a name="示例代码"></a>
+
+### 1. 文件传输服务器
+```cpp
+PortMonitor& monitor = PortMonitor::getInstance();
+
+monitor.setMessageHandler([](const std::string& msg) {
+    try {
+        // 将接收到的数据转为无符号字符向量
+        std::vector<unsigned char> data(msg.begin(), msg.end());
+        
+        // 解析文件
+        OtterLamae::ParseReceivedFile(data);
+        return "文件接收成功";
+    } catch (const std::exception& e) {
+        return std::string("错误: ") + e.what();
+    }
 });
 
-// 发送消息
-std::vector<std::string> responses;
-PortMonitor::sendMessage("127.0.0.1", 8080, "测试消息", 3000, &responses);
-
-// 获取活跃连接
-auto activeConns = monitor.getActiveConnections();
-
-// 停止监听
-monitor.stopMonitoring();
+monitor.startMonitoring(8081);
 ```
 
-### 4.2 文件传输
-
+### 2. 文件发送客户端
 ```cpp
-// 发送文件
-auto fileData = OtterLamae::InitSenndFile("example.txt");
-std::string fileStr(reinterpret_cast<char*>(fileData.data()), fileData.size());
-PortMonitor::sendMessage("127.0.0.1", 8080, fileStr);
+// 准备文件数据
+auto fileData = OtterLamae::InitSenndFile("report.pdf");
 
-// 接收文件
-auto messages = monitor.getMessageHistory();
-for (const auto& msg : messages) {
-    if (!msg.isOutgoing) {
-        std::vector<unsigned char> data(msg.content.begin(), msg.content.end());
-        OtterLamae::ParseReceivedFile(data);
+// 转为字符串
+std::string fileStr(fileData.begin(), fileData.end());
+
+// 发送文件
+PortMonitor::sendMessage("192.168.1.100", 8081, fileStr);
+```
+
+### 3. HTTP 参数处理器
+```cpp
+monitor.setParamHandler("calculate", [](const std::string& expr) {
+    try {
+        // 简单计算器功能
+        std::istringstream iss(expr);
+        double a, b;
+        char op;
+        iss >> a >> op >> b;
+        
+        switch (op) {
+            case '+': return std::to_string(a + b);
+            case '-': return std::to_string(a - b);
+            case '*': return std::to_string(a * b);
+            case '/': 
+                if (b == 0) throw std::runtime_error("除零错误");
+                return std::to_string(a / b);
+            default: throw std::runtime_error("无效运算符");
+        }
+    } catch (...) {
+        return "计算错误";
+    }
+});
+```
+
+使用方式：`http://localhost:8080?calculate=5*7`
+
+## 高级功能 <a name="高级功能"></a>
+
+### 消息历史分析
+```cpp
+// 获取所有消息历史
+auto history = monitor.getMessageHistory();
+
+// 分析消息
+int sentCount = 0, receivedCount = 0;
+for (const auto& record : history) {
+    if (record.isOutgoing) {
+        sentCount++;
+    } else {
+        receivedCount++;
+    }
+}
+
+std::cout << "发送消息: " << sentCount << "条, "
+          << "接收消息: " << receivedCount << "条" << std::endl;
+```
+
+### 连接管理
+```cpp
+// 获取所有活跃连接
+auto activeConns = monitor.getActiveConnections();
+
+// 关闭非本地连接
+for (SOCKET sock : activeConns) {
+    sockaddr_in addr;
+    int addrLen = sizeof(addr);
+    getsockname(sock, (sockaddr*)&addr, &addrLen);
+    
+    if (ntohl(addr.sin_addr.s_addr) != 0x7F000001) { // 127.0.0.1
+        monitor.closeConnection(sock);
     }
 }
 ```
 
-## 5. 实现细节
+### 网页集成
+```cpp
+// 在命名空间中打开网页应用
+OtterLamae::OpenWeb(
+    L"/dashboard.html", // 网页路径
+    1200,               // 窗口宽度
+    800,                // 窗口高度
+    100,                // X位置
+    100                 // Y位置
+);
+```
 
-### 5.1 线程模型
+## 注意事项 <a name="注意事项"></a>
 
-- **监控线程**：`monitorThreadFunc` 负责接受新连接
-- **连接线程**：每个连接有一个独立的 `connectionThreadFunc` 线程处理通信
-- **锁机制**：使用三个互斥锁保护不同资源
-  - `m_connectionsMutex`：保护连接列表
-  - `m_historyMutex`：保护消息历史
-  - `m_handlersMutex`：保护参数处理器
+1. **资源管理**：
+   - 确保在程序退出前调用 `stopMonitoring()`
+   - 及时关闭不再需要的连接
 
-### 5.2 连接管理
+2. **线程安全**：
+   - 在多线程环境中使用互斥锁
+   - 避免在处理器中执行长时间操作
 
-- 最大连接数限制为 1000
-- 3分钟无活动自动断开连接
-- 提供主动关闭连接接口
-
-### 5.3 消息处理
-
-- 记录所有收发消息
-- 消息历史限制为 900 条（先进先出）
-- 支持按连接查询消息
-
-## 6. 注意事项
-
-1. **线程安全**：大多数公共接口是线程安全的，但应注意不要在回调函数中调用可能导致死锁的方法
-2. **资源清理**：确保在程序退出前调用 `stopMonitoring()`
 3. **性能考虑**：
-   - 消息历史记录会影响性能，生产环境应考虑关闭或优化
-   - 1GB 的接收缓冲区可能过大，应根据实际情况调整
-4. **异常处理**：网络操作可能失败，应适当处理异常
+   - 连接数限制为1000
+   - 消息历史限制为200条
+   - 长时间空闲连接（3分钟）自动关闭
 
+4. **错误处理**：
+   - 检查 Winsock 初始化结果
+   - 处理套接字错误
+   - 使用异常处理文件操作
 
-使用单例模式实现静态方法访问实例成员
+5. **跨平台限制**：
+   - 当前实现仅支持 Windows 平台
+   - 依赖 Winsock2 库
+
+## 总结
+PortMonitor 提供了一个强大而灵活的 TCP 通信框架，结合 OtterLamae 命名空间的实用功能，可以快速开发各种网络应用，从简单的消息服务到文件传输系统。通过合理使用消息处理器和参数处理器，开发者可以轻松扩展功能以满足特定需求。
+
+> 提示：在实际项目中，建议将 PortMonitor 封装在更高层次的服务类中，以提供更符合业务需求的接口和额外的安全措施。
 
 ### Json请前往 https://github.com/Yanghaopor/Simple_Json_Cpp 查看原理与教程
+### 关于文档网页查看请前往 https://api.xiaofa520.cn/XiaoAPI/ 我们的官方文档查看
+
+# 此更新文档仅支持3.7
